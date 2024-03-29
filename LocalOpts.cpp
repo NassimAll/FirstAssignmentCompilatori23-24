@@ -56,6 +56,34 @@ bool runOnBasicBlock(BasicBlock &B) {
                     }
                 }
             }
+        // Strength Reduction of Multiply
+        if (I.getOpcode() == Instruction::Mul) {
+
+            if (ConstantInt *C = dyn_cast<ConstantInt>(I.getOperand(0))) {
+                if (C->getValue().isPowerOf2()) {
+                    ConstantInt *Cshl = ConstantInt::get(C->getType(), C->getValue().exactLogBase2());
+                    Instruction *NewInst = BinaryOperator::Create(
+                        Instruction::Shl, I.getOperand(1), Cshl);
+                    outs() << "Creating a shift left of " << Cshl->getValue() << " \n";
+                    NewInst->insertAfter(&I);
+                    I.replaceAllUsesWith(NewInst);
+                    continue;
+                }
+            }
+
+            if (ConstantInt *C = dyn_cast<ConstantInt>(I.getOperand(1))) {
+                if (C->getValue().isPowerOf2()) {
+                    ConstantInt *Cshl = ConstantInt::get(C->getType(), C->getValue().exactLogBase2());
+                    Instruction *NewInst = BinaryOperator::Create(
+                        Instruction::Shl, I.getOperand(0), Cshl);
+                    outs() << "Creating a shift left of " << Cshl->getValue() << " \n";
+                    NewInst->insertAfter(&I);
+                    I.replaceAllUsesWith(NewInst);
+                    continue;
+                }
+            }
+            }
+
             // Strength Reduction of division 
             if (I.getOpcode() == Instruction::SDiv) {
                 if(ConstantInt *C = dyn_cast<ConstantInt>(I.getOperand(1))) {
