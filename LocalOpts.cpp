@@ -16,11 +16,11 @@ using namespace llvm;
 bool runOnBasicBlock(BasicBlock &B) {
     
     for (auto &I : B) {
-        //Instruction *I = &II;
         // check if instruction is a binary operator instruction
-        if(dyn_cast<BinaryOperator>(&I)) {
+      if(dyn_cast<BinaryOperator>(&I)) {
             // Algebraic Identity with add
             if (I.getOpcode() == Instruction::Add) {
+              //Check the first op 
                 if(ConstantInt *C = dyn_cast<ConstantInt>(I.getOperand(0))) {
                     if (C->isZero()){
                         outs() << "Replacing a sum with 0 \n";
@@ -28,7 +28,7 @@ bool runOnBasicBlock(BasicBlock &B) {
                         continue;
                     }
                 }
-
+                //Check the second op 
                 if(ConstantInt *C = dyn_cast<ConstantInt>(I.getOperand(1))) {
                     if (C->isZero()){
                         outs() << "Replacing a sum with 0 \n";
@@ -38,8 +38,10 @@ bool runOnBasicBlock(BasicBlock &B) {
                 }
 
             }
-            // Algebraic Identity with mul
+           // Check if it's a mul
             if (I.getOpcode() == Instruction::Mul) {
+               // Algebraic Identity with mul
+               //check first op
                 if(ConstantInt *C = dyn_cast<ConstantInt>(I.getOperand(0))) {
                     if (C->getValue() == 1){
                         outs() << "Replacing a mul with 1 \n";
@@ -47,7 +49,7 @@ bool runOnBasicBlock(BasicBlock &B) {
                         continue;
                     }
                 }
-
+                //check second op
                 if(ConstantInt *C = dyn_cast<ConstantInt>(I.getOperand(1))) {
                     if (C->getValue() == 1){
                         outs() << "Replacing a mul with 1 \n";
@@ -55,10 +57,9 @@ bool runOnBasicBlock(BasicBlock &B) {
                         continue;
                     }
                 }
-            }
-        // Strength Reduction of Multiply
-        if (I.getOpcode() == Instruction::Mul) {
 
+            // Strength Reduction of Multiply
+            //Check if the first op che be reduced
             if (ConstantInt *C = dyn_cast<ConstantInt>(I.getOperand(0))) {
                 if (C->getValue().isPowerOf2()) {
                     ConstantInt *Cshl = ConstantInt::get(C->getType(), C->getValue().exactLogBase2());
@@ -68,9 +69,43 @@ bool runOnBasicBlock(BasicBlock &B) {
                     NewInst->insertAfter(&I);
                     I.replaceAllUsesWith(NewInst);
                     continue;
-                }
-            }
+                }else {
+                  //Check if the first op che be reduced because is near a power of 2
+                  APInt value = C->getValue();
+                    if ((value-1).isPowerOf2()) {
+                        ConstantInt *Cshl = ConstantInt::get(C->getType(), (value-1).exactLogBase2());
+                        // Create the mul 
+                        Instruction *mul = BinaryOperator::Create(
+                            Instruction::Shl, I.getOperand(1), Cshl);
+                        // complete the mul with an addition 
+                        Instruction *NewInst = BinaryOperator::Create(
+                            Instruction::Add, I.getOperand(1), mul);
+                        outs() << "Creating a shift left of " << Cshl->getValue() << " and an add \n";
+                        mul->insertAfter(&I);
+                        NewInst->insertAfter(mul);
+                        I.replaceAllUsesWith(NewInst);
+                    
+                        continue;
+                    }
 
+                    if ((value+1).isPowerOf2()) {
+                        ConstantInt *Cshl = ConstantInt::get(C->getType(), (value+1).exactLogBase2());
+                        // Create the mul 
+                        Instruction *mul = BinaryOperator::Create(
+                            Instruction::Shl, I.getOperand(1), Cshl);
+                        // complete the mul with a sub 
+                        Instruction *NewInst = BinaryOperator::Create(
+                            Instruction::Sub, mul, I.getOperand(1));
+                        outs() << "Creating a shift left of " << Cshl->getValue() << " and a sub of " << C->getValue() <<" \n";
+                        mul->insertAfter(&I);
+                        NewInst->insertAfter(mul);
+                        I.replaceAllUsesWith(NewInst);
+                    
+                        continue;
+                    }
+                }
+              } 
+            //Check if the second op che be reduced
             if (ConstantInt *C = dyn_cast<ConstantInt>(I.getOperand(1))) {
                 if (C->getValue().isPowerOf2()) {
                     ConstantInt *Cshl = ConstantInt::get(C->getType(), C->getValue().exactLogBase2());
@@ -80,12 +115,47 @@ bool runOnBasicBlock(BasicBlock &B) {
                     NewInst->insertAfter(&I);
                     I.replaceAllUsesWith(NewInst);
                     continue;
+                } else {
+                  //Check if the second op che be reduced because is near a power of 2
+                    APInt value = C->getValue();
+                    if ((value-1).isPowerOf2()) {
+                        ConstantInt *Cshl = ConstantInt::get(C->getType(), (value-1).exactLogBase2());
+                        // Create the mul 
+                        Instruction *mul = BinaryOperator::Create(
+                            Instruction::Shl, I.getOperand(0), Cshl);
+                        // complete the mul with an addition 
+                        Instruction *NewInst = BinaryOperator::Create(
+                            Instruction::Add, I.getOperand(0), mul);
+                        outs() << "Creating a shift left of " << Cshl->getValue() << " and an add \n";
+                        mul->insertAfter(&I);
+                        NewInst->insertAfter(mul);
+                        I.replaceAllUsesWith(NewInst);
+                    
+                        continue;
+                    }
+                    //Check if the second op che be reduced because is near a power of 2
+                    if ((value+1).isPowerOf2()) {
+                        ConstantInt *Cshl = ConstantInt::get(C->getType(), (value+1).exactLogBase2());
+                        // Create the mul 
+                        Instruction *mul = BinaryOperator::Create(
+                            Instruction::Shl, I.getOperand(0), Cshl);
+                        // complete the mul with a sub 
+                        Instruction *NewInst = BinaryOperator::Create(
+                            Instruction::Sub, mul, I.getOperand(0));
+                        outs() << "Creating a shift left of " << Cshl->getValue() << " and a sub of " << C->getValue() <<" \n";
+                        mul->insertAfter(&I);
+                        NewInst->insertAfter(mul);
+                        I.replaceAllUsesWith(NewInst);
+                    
+                        continue;
+                    }
                 }
             }
             }
 
             // Strength Reduction of division 
             if (I.getOpcode() == Instruction::SDiv) {
+              //check if the divider is a constant and a power of 2
                 if(ConstantInt *C = dyn_cast<ConstantInt>(I.getOperand(1))) {
                     if (C->getValue().isPowerOf2()){
                         ConstantInt *Crhl = ConstantInt::get(C->getType(), C->getValue().exactLogBase2());
@@ -99,12 +169,13 @@ bool runOnBasicBlock(BasicBlock &B) {
                 }
             }
 
-        }
+      }
 
     }
 
       return true;
 }
+
 
 
 
