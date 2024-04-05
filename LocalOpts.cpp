@@ -13,6 +13,7 @@
 
 using namespace llvm;
 
+
 bool runOnBasicBlock(BasicBlock &B) {
     
     for (auto &I : B) {
@@ -172,6 +173,105 @@ bool runOnBasicBlock(BasicBlock &B) {
       }
 
     }
+
+    for (auto &I : B) {
+        if(dyn_cast<BinaryOperator>(&I)) {
+            
+            if (I.getOpcode() == Instruction::Add) {
+                if (ConstantInt *C = dyn_cast<ConstantInt>(I.getOperand(1))){
+                    for (auto U = I.user_begin(); U != I.user_end(); ++U) {
+                        Instruction *nextI = dyn_cast<Instruction>(*U);
+                        if(nextI->getOpcode() == Instruction::Sub) {
+                            if (C->getValue() == dyn_cast<ConstantInt>(nextI->getOperand(1))->getValue()){
+                                nextI->replaceAllUsesWith(I.getOperand(0));
+                                outs() << "Code optimization removing sub after add\n";
+                                continue;
+                            }
+                        }
+                    }
+                }
+
+                if (ConstantInt *C = dyn_cast<ConstantInt>(I.getOperand(0))){
+                   for (auto U = I.user_begin(); U != I.user_end(); ++U) {
+                        Instruction *nextI = dyn_cast<Instruction>(*U);
+                        if(nextI->getOpcode() == Instruction::Sub) {
+                            if (C->getValue() == dyn_cast<ConstantInt>(nextI->getOperand(1))->getValue()){
+                                nextI->replaceAllUsesWith(I.getOperand(1));
+                                outs() << "Code optimization removing sub after add\n";
+                                continue;
+                            }
+                        }
+                    }
+                }
+            }
+
+            if (I.getOpcode() == Instruction::Sub) {
+                if (ConstantInt *C = dyn_cast<ConstantInt>(I.getOperand(1))){
+                    for (auto U = I.user_begin(); U != I.user_end(); ++U) {
+                        Instruction *nextI = dyn_cast<Instruction>(*U);
+                        if(nextI->getOpcode() == Instruction::Add) {
+                            if (C->getValue() == dyn_cast<ConstantInt>(nextI->getOperand(1))->getValue()){
+                                nextI->replaceAllUsesWith(I.getOperand(0));
+                                outs() << "Code optimization removing add after sub\n";
+                                continue;
+                            }else if (C->getValue() == dyn_cast<ConstantInt>(nextI->getOperand(0))->getValue()) {
+                                nextI->replaceAllUsesWith(I.getOperand(0));
+                                outs() << "Code optimization removing add after sub\n";
+                                continue;
+                            }
+                        }
+                    }
+                }
+            }
+            //Multi optimization with mul
+            if (I.getOpcode() == Instruction::Mul){
+                if (ConstantInt *C = dyn_cast<ConstantInt>(I.getOperand(1))){
+                    for (auto U = I.user_begin(); U != I.user_end(); ++U) {
+                        Instruction *nextI = dyn_cast<Instruction>(*U);
+                        if(nextI->getOpcode() == Instruction::SDiv) {
+                            if (C->getValue() == dyn_cast<ConstantInt>(nextI->getOperand(1))->getValue()){
+                                nextI->replaceAllUsesWith(I.getOperand(0));
+                                outs() << "Code optimization mul/div removing the div \n";
+                                continue;
+                            }
+                        }
+                    }
+                }
+
+                if (ConstantInt *C = dyn_cast<ConstantInt>(I.getOperand(0))){
+                   for (auto U = I.user_begin(); U != I.user_end(); ++U) {
+                        Instruction *nextI = dyn_cast<Instruction>(*U);
+                        if(nextI->getOpcode() == Instruction::SDiv) {
+                            if (C->getValue() == dyn_cast<ConstantInt>(nextI->getOperand(1))->getValue()){
+                                nextI->replaceAllUsesWith(I.getOperand(1));
+                                outs() << "Code optimization mul/div removing the div \n";
+                                continue;
+                            }
+                        }
+                    }
+                }
+            }
+            //Multi optimization with div
+            if (I.getOpcode() == Instruction::SDiv){
+                if (ConstantInt *C = dyn_cast<ConstantInt>(I.getOperand(1))){
+                    for (auto U = I.user_begin(); U != I.user_end(); ++U) {
+                        Instruction *nextI = dyn_cast<Instruction>(*U);
+                        if(nextI->getOpcode() == Instruction::Mul) {
+                            if (C->getValue() == dyn_cast<ConstantInt>(nextI->getOperand(1))->getValue()){
+                                nextI->replaceAllUsesWith(I.getOperand(0));
+                                outs() << "Code optimization mul/div removing the mul \n";
+                                continue;
+                            }else if (C->getValue() == dyn_cast<ConstantInt>(nextI->getOperand(0))->getValue()) {
+                                nextI->replaceAllUsesWith(I.getOperand(0));
+                                continue;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
 
       return true;
 }
