@@ -1,6 +1,6 @@
-# First assignment of my middle-end compilers class
+# First assignment compilers class
 
-adding the following local optimizations to my llvm pass:
+Implementing the following local optimizations to my llvm pass:
 
 1. Algebraic Identity: Simplifying basic equations:
     - `x + 0 = 0 + x = x -> x`
