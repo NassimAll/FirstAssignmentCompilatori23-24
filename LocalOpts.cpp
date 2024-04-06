@@ -62,6 +62,7 @@ bool runOnBasicBlock(BasicBlock &B) {
             // Strength Reduction of Multiply
             //Check if the first op che be reduced
             if (ConstantInt *C = dyn_cast<ConstantInt>(I.getOperand(0))) {
+                //check if it's a power of 2
                 if (C->getValue().isPowerOf2()) {
                     ConstantInt *Cshl = ConstantInt::get(C->getType(), C->getValue().exactLogBase2());
                     Instruction *NewInst = BinaryOperator::Create(
@@ -71,7 +72,7 @@ bool runOnBasicBlock(BasicBlock &B) {
                     I.replaceAllUsesWith(NewInst);
                     continue;
                 }else {
-                  //Check if the first op che be reduced because is near a power of 2
+                  //Check if the first op can be reduced because is near a power of 2
                   APInt value = C->getValue();
                     if ((value-1).isPowerOf2()) {
                         ConstantInt *Cshl = ConstantInt::get(C->getType(), (value-1).exactLogBase2());
@@ -85,7 +86,6 @@ bool runOnBasicBlock(BasicBlock &B) {
                         mul->insertAfter(&I);
                         NewInst->insertAfter(mul);
                         I.replaceAllUsesWith(NewInst);
-                    
                         continue;
                     }
 
@@ -100,8 +100,7 @@ bool runOnBasicBlock(BasicBlock &B) {
                         outs() << "Creating a shift left of " << Cshl->getValue() << " and a sub of " << C->getValue() <<" \n";
                         mul->insertAfter(&I);
                         NewInst->insertAfter(mul);
-                        I.replaceAllUsesWith(NewInst);
-                    
+                        I.replaceAllUsesWith(NewInst);              
                         continue;
                     }
                 }
@@ -173,12 +172,13 @@ bool runOnBasicBlock(BasicBlock &B) {
       }
 
     }
-
+    // Iterate to perform Multi-instruction optimization 
     for (auto &I : B) {
         if(dyn_cast<BinaryOperator>(&I)) {
-            
+            //check if the first op is an add 
             if (I.getOpcode() == Instruction::Add) {
                 if (ConstantInt *C = dyn_cast<ConstantInt>(I.getOperand(1))){
+                    //Iterare the user to find a sub that can be optimized
                     for (auto U = I.user_begin(); U != I.user_end(); ++U) {
                         Instruction *nextI = dyn_cast<Instruction>(*U);
                         if(nextI->getOpcode() == Instruction::Sub) {
@@ -204,7 +204,7 @@ bool runOnBasicBlock(BasicBlock &B) {
                     }
                 }
             }
-
+            //Multi instruction optimized with first a sub
             if (I.getOpcode() == Instruction::Sub) {
                 if (ConstantInt *C = dyn_cast<ConstantInt>(I.getOperand(1))){
                     for (auto U = I.user_begin(); U != I.user_end(); ++U) {
@@ -245,24 +245,6 @@ bool runOnBasicBlock(BasicBlock &B) {
                             if (C->getValue() == dyn_cast<ConstantInt>(nextI->getOperand(1))->getValue()){
                                 nextI->replaceAllUsesWith(I.getOperand(1));
                                 outs() << "Code optimization mul/div removing the div \n";
-                                continue;
-                            }
-                        }
-                    }
-                }
-            }
-            //Multi optimization with div
-            if (I.getOpcode() == Instruction::SDiv){
-                if (ConstantInt *C = dyn_cast<ConstantInt>(I.getOperand(1))){
-                    for (auto U = I.user_begin(); U != I.user_end(); ++U) {
-                        Instruction *nextI = dyn_cast<Instruction>(*U);
-                        if(nextI->getOpcode() == Instruction::Mul) {
-                            if (C->getValue() == dyn_cast<ConstantInt>(nextI->getOperand(1))->getValue()){
-                                nextI->replaceAllUsesWith(I.getOperand(0));
-                                outs() << "Code optimization mul/div removing the mul \n";
-                                continue;
-                            }else if (C->getValue() == dyn_cast<ConstantInt>(nextI->getOperand(0))->getValue()) {
-                                nextI->replaceAllUsesWith(I.getOperand(0));
                                 continue;
                             }
                         }
