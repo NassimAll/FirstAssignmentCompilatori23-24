@@ -1,34 +1,64 @@
-//===-- LocalOpts.cpp - Example Transformations --------------------------===//
-//
-// Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
-// See https://llvm.org/LICENSE.txt for license information.
-// SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
-//
-//===----------------------------------------------------------------------===//
-
 #include "llvm/Transforms/Utils/LoopWalk.h"
 #include "llvm/IR/Instructions.h"
 #include "llvm/IR/InstrTypes.h"
 #include "llvm/IR/Dominators.h"
+#include "llvm/Analysis/ValueTracking.h"
 #include <cmath>
 
 using namespace llvm;
 
-typedef std::set<Instruction*> Invariants;
+std::set<Instruction*> Invariants;
+std::vector<Instruction*> InstToMove;
 
-bool isLoopInvariantOperand(llvm::Value *Operand, Loop &L) {
-
-  if (llvm::Instruction *op1 = dyn_cast<llvm::Instruction>(Operand)) {
-    if (L.contains(op1->getParent())) {
-      return false;
-    }
+/**
+ * @brief 
+ *  
+ *  Controlliamo che l'operando sia loop invariant, per esserelo può:
+ *  - essere una costante
+ *  - avere reaching def fuori dal loop 
+ *  - derivare già da un istruzione loop invariant
+ * 
+ * @param operand Operando da controllare
+ * @param loop Loop in esame
+ * @return true 
+ * @return false 
+ */
+bool isOperandInvariant(Value *operand, Loop &loop) {
+  if (isa<llvm::Constant>(operand) || isa<llvm::Argument>(operand)) {
+    return true;
   }
 
-  // if(llvm::Instruction *Op = dyn_cast<llvm::Instruction>(Operand)) {
-  //   outs () << *Op->getParent() << "\n";
-  //   if(L.contains(Op->getParent())) return false;
-  // }
+  if (llvm::Instruction *inst = dyn_cast<llvm::Instruction>(operand)) {
+    if (!loop.contains(inst->getParent()) || Invariants.count(inst)) {
+      return true;
+    }
+  }
+  return false;
+}
+
+bool isInstructionLoopInvariant(Instruction *I, Loop &loop) {
+  //Controllo che la nostra istruzione non abbia efetti collaterali e possa essere spostata
+  if (!isSafeToSpeculativelyExecute(I)) {
+    outs() << *I << " - Istruction is not safe to move \n\n";
+    return false;
+  }
+  //opInvariant = true;
+  for(auto it = I->op_begin(); it != I->op_end(); ++it) {
+    if (!isOperandInvariant(*it, loop)) 
+      return false;
+  }
+  outs() << "This instruction can be removed: " << *I << "\n";
+  
   return true;
+}
+
+void findInstInvariants(Loop &loop, BasicBlock &block) {
+  for(auto &I : block) {
+    if (isInstructionLoopInvariant(&I, loop)) {
+        Invariants.insert(&I);
+        InstToMove.push_back(&I);
+      }
+  } 
 }
 
 bool runOnLoop(Loop &loop, LoopAnalysisManager &LAM, LoopStandardAnalysisResults &LAR, LPMUpdater &LU) {
@@ -41,6 +71,10 @@ bool runOnLoop(Loop &loop, LoopAnalysisManager &LAM, LoopStandardAnalysisResults
   if (!preheader) {
     return false;
   }
+  // Creiamo un vettore che contiene tutte le possibili uscite del loop
+  SmallVector<BasicBlock*> vec {};
+  loop.getExitBlocks(vec);
+ 
   BasicBlock * exitBlock = loop.getUniqueExitBlock();
   outs() << "--------------------------- EXIT BLOCK ----------------------------- \n";
   exitBlock->print(outs());
@@ -58,42 +92,49 @@ bool runOnLoop(Loop &loop, LoopAnalysisManager &LAM, LoopStandardAnalysisResults
   BB->print(outs());
   outs() << "---------------------------  ----------------------------- \n\n";
 
-  // BasicBlock *head = loop.getHeader();
-  // Function *F = head->getParent();
+  /*
+    Prima di tutto si controlla se il blocco del loop in esame domina tutte le uscite
+    del loop
+  */
   auto loopBlocks = loop.getBlocks();
   for (auto &block : loopBlocks) {
-      bool dominateExit = false;
+      bool dominateExits = true;
       outs() << "--------------------------- BLOCK ----------------------------- \n";
       block->print(outs());
       outs() << "---------------------------  ----------------------------- \n\n";
-      /*
-        Prima di tutto si controlla se il blocco del loop in esame domina le uscite
-      */
-      dominateExit = DT.dominates(block, exitBlock);
-      outs() << block.getName() << " - Domina le uscite: " << dominateExit << "\n";
 
-      findBlockInvariants(loop,block)
+      // dominateExit = DT.dominates(block, exitBlock);
+      // outs() << block->getName() << " - Domina le uscite: " << dominateExit << "\n";
+
+      for(auto it = vec.begin(); it != vec.end(); ++it) {
+          BasicBlock *exitBlock = *it;
+          outs() << "BB Exit: " << exitBlock->getName() << "\n\n";
+          if(!DT.dominates(block, exitBlock))
+              dominateExits = false;
+      }
+      
+      outs() << block->getName() << " - Domina le uscite: " << dominateExits << "\n";
+      /*
+        se il blocco domina tutte le uscite controlliamo se al suo interno sono 
+        presenti delle istruzioni loop invariant
+      */
+      if (dominateExits) 
+        findInstInvariants(loop, *block);
+  }
+  //Spostiamo  le istruzioni loop invariant
+  for (auto &I : InstToMove) {
+    outs () << "Inst to move: " << *I << "\n";
+    I->moveBefore(preheader->getTerminator());
   }
 
-  
+  outs() << "--------------------------- NEW PRE-HEADER ----------------------------- \n";
+  preheader->print(outs());
+  outs() << "---------------------------   ----------------------------- \n\n";
+
 
   return true;
 }
 
-void findBlockInvariants(Loop &loop, BasicBlock &block) {
-  // for (auto &BB : *F) {
-  //   for(auto &I : BB) {
-  //     if (dyn_cast<BinaryOperator>(&I)) {
-  //       //outs () << I << "\n";
-  //       if (isLoopInvariantOperand(I.getOperand(0), L) && isLoopInvariantOperand(I.getOperand(1), L)) {
-  //         outs() << "Inst : " << I << " have reaching def outside\n";
-  //       } else {
-  //         outs() << "Inst : " << I << " have reaching def Inside\n";
-  //       }
-  //     }
-  //   } 
-  // }
-}
 
 PreservedAnalyses LoopWalk::run(Loop &L, LoopAnalysisManager &LAM, LoopStandardAnalysisResults &LAR, LPMUpdater &LU) {
 
@@ -101,22 +142,6 @@ PreservedAnalyses LoopWalk::run(Loop &L, LoopAnalysisManager &LAM, LoopStandardA
     return PreservedAnalyses::none();
   }
   
-
-  // for (auto &BB : *F) {
-  //   outs() << "BB : " << BB.getName() << "\n";
-  //   if (BB.getName() == "body") {
-  //     for(auto &I : BB) {
-  //       outs() << "Inst : " << I << "\n";
-
-  //       Value *firstOperand = I.getOperand(0);
-  //       Value *secondOperand = I.getOperand(1);
-
-  //       for (auto B : L.blocks()) {
-          
-  //       }
-  //     }
-  //   }
-
   return PreservedAnalyses::all();
 }
 
