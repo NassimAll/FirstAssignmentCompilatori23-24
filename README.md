@@ -15,15 +15,9 @@ Implementing the following local optimizations to my llvm pass:
 3. Multi-Instruction Optimization:
     - `a = b + 1, c = a - 1 -> a = b + 1, c = b`
 
-In the folder for the second assignment there is a pdf with the solution of 3 data flow analysis problems. 
-    - `Very busy expression`
-    - `Dominator analysis`
-    - `Constant propagation`
-
 # ASSIGNMENT 2:
 
-Dataflow analysis of:
-
+In the folder for the second assignment there is a pdf with the solution of 3 data flow analysis problems. 
 - Very busy expression
 
 - Dominator analisys
