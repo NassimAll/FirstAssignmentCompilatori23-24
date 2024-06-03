@@ -1,6 +1,6 @@
 # ASSIGNMENTS COMPILATORI 23-24
 
-ASSIGNMENT 1:
+# ASSIGNMENT 1:
 
 Implementing the following local optimizations to my llvm pass:
 
@@ -20,20 +20,20 @@ In the folder for the second assignment there is a pdf with the solution of 3 da
     - `Dominator analysis`
     - `Constant propagation`
 
-ASSIGNMENT 2:
+# ASSIGNMENT 2:
 
 Dataflow analysis of:
 
-1. Very busy expression
+- Very busy expression
 
-2. Dominator analisys
+- Dominator analisys
 
-3. Constat propagation
+- Constat propagation
 
-ASSIGNMENT 3:
+# ASSIGNMENT 3:
 
 Implementing optimization pass LICM - Loop invariant code motion
 
-ASSIGNMENT 4:
+# ASSIGNMENT 4:
 
 Implementing optimization pass LF - Loop fusion
