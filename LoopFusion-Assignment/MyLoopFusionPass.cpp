@@ -19,14 +19,18 @@ bool isAdjacent(Loop *L0, Loop *L1, bool &isG) {
     if (L0->getExitBlock()->getSingleSuccessor() == L1->getLoopGuardBranch()->getParent()) {
       outs() << "Branch guard L0 uguale a entry successiva L1" << "\n";
       isG = true;
+
       //CHECK SE HANNO LA STESSA GUARDIA PERCHE ALTRIMWNTI IMPOSSIBILE FONDERE
       if (auto L0CmpInst = dyn_cast<Instruction>(L0->getLoopGuardBranch()->getCondition()))
-      if (auto L1CmpInst = dyn_cast<Instruction>(L1->getLoopGuardBranch()->getCondition()))
-        if (!L0CmpInst->isIdenticalTo(L1CmpInst))
-          return false;
-      outs() << "guardie identiche" << "\n";
-      return true;
-    } else return false;
+        if (auto L1CmpInst = dyn_cast<Instruction>(L1->getLoopGuardBranch()->getCondition()))
+          if (!L0CmpInst->isIdenticalTo(L1CmpInst))
+            return false;
+          else {
+            outs() << "guardie identiche" << "\n";
+            return true;
+          }
+      
+    }else return false;
 
   } else if (!L0->isGuarded() && L1->isGuarded() || L0->isGuarded() && !L1->isGuarded()) {
     outs() << "Uno guarded e l'altro no, fusion impossibile" << "\n";
@@ -41,10 +45,10 @@ bool isAdjacent(Loop *L0, Loop *L1, bool &isG) {
 }
 
 bool isControlFlowEquivalent(DominatorTree &DT, PostDominatorTree &PDT, Loop *L0, Loop *L1, bool isG) {  
-  DT.print(outs());
-  outs() << "\n\n";
-  PDT.print(outs());
-  outs() << "\n\n";
+  // DT.print(outs());
+  // outs() << "\n\n";
+  // PDT.print(outs());
+  // outs() << "\n\n";
   if (isG) {
     if(DT.dominates(L0->getLoopGuardBranch()->getParent(),L1->getLoopGuardBranch()->getParent())) {
       outs() << "L0 domina L1 \n";
@@ -85,7 +89,7 @@ bool sameIterate(ScalarEvolution &SE, Loop *L0, Loop *L1) {
 
 bool haveDependecies(Loop *L0, Loop *L1) {
   auto BlocksL0 = L0->getBlocks();
-  bool dep = true;
+  bool dep = false;
   for (auto &BB : BlocksL0) {
     for (Instruction &I : *BB) {
       // Find instructions that works on arrays and get the array pointer
@@ -97,11 +101,11 @@ bool haveDependecies(Loop *L0, Loop *L1) {
         for (auto &use : I.getOperand(0)->uses()) {
           if (auto inst = dyn_cast<Instruction>(use.getUser())) {
             if (L1->contains(inst)) {
-              outs() << *inst << "\n";
+              outs() << *inst << "\n\n";
                
               // Check if the instruction where the pointer is used, uses a sext instruction. This instuction should be another GetElementPtr in L2
               if (auto sext = dyn_cast<Instruction>(inst->getOperand(1))) {
-                outs() << "sext " <<  *sext << "\n";
+                outs() << "sext " <<  *sext << "\n\n";
                 // Check if the sext instruction uses a PHI instruction, if it doesn't it means that there is another instruction that alters the value of the offset
                 if (auto phyInstruction = dyn_cast<Instruction>(sext->getOperand(0))) {
                   switch(phyInstruction->getOpcode()) {
@@ -109,9 +113,9 @@ bool haveDependecies(Loop *L0, Loop *L1) {
                     case Instruction::Sub: // If the non-phi instruction is a sub, it means I'm working with a negative offset, in this case you should still be able to merge the loops.
                       break;
                     default:{
-                      outs() << *phyInstruction << "\n";
-                      dep = false; 
-                      outs() << dep << "\n";
+                      outs() << *phyInstruction << "\n\n";
+                      dep = true; 
+                      //outs() << "Dipendenza: " << dep << "\n\n";
                       break;
                     }  
                  }
@@ -123,11 +127,12 @@ bool haveDependecies(Loop *L0, Loop *L1) {
       } 
     }
   }
+  outs() << "Dipendenza: " << dep << "\n\n";
   return dep;
 }
 
 //La fusione di due loop garded è differente perchè bisogna tenere conto delle guardie nella fusione
-// NOTA: Si possono fondere sono i loop che hanno la guardia identica 
+// NOTA: Si possono fondere solo i loop che hanno la guardia identica 
 void fusionGarded(Loop *L0, Loop *L1) {
   // Replace uses of IV in L2 with IV in L1
   outs() << " GARDED FUSION \n";
@@ -269,12 +274,13 @@ PreservedAnalyses MyLoopFusionPass::run(Function &F, FunctionAnalysisManager &AM
         continue;
 
       //PUNTO 4
-      if (!haveDependecies(L0, L1))
+      if (haveDependecies(L0, L1))
         continue;
       if (!isguard)   fusion(L0,L1);
       else fusionGarded(L0,L1);
 
-      analysisDone = true;      
+      analysisDone = true;
+      break;      
     }
   }
   
